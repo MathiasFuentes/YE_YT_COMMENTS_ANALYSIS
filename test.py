@@ -22,8 +22,8 @@ classifier = pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-ba
 results = classifier(tweets, batch_size=8, truncation=True)
 
 # Mostrar análisis por cada uno de los tweets
-for tweet, res in zip(tweets, results):
-    print(f"{tweet}\n -> {res}\n")
+#for tweet, res in zip(tweets, results):
+#    print(f"{tweet}\n -> {res}\n")
 
 # Resumen rápido -> 'S': N.
 # S es el sentimiento identificado, N es el número de veces que apareció.
