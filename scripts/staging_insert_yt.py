@@ -1,7 +1,7 @@
 from googleapiclient.discovery import build
 import sqlite3, os
 
-API_KEY = AIzaSyAR5nJQHPWMyHgDk7NJUI2kAF44Zxuwoz4
+API_KEY = YOUTUBE_API_KEY
 VIDEO_ID = "qxOeWuAHOiw"
 
 yt = build("youtube", "v3", developerKey=API_KEY)

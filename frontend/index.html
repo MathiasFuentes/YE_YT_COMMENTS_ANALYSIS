@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Kanye Sentiment Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0"></script>
+  <style>
+    :root{--bg:#0f172a;--card:#111827;--muted:#9ca3af;--text:#e5e7eb;}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1200px;margin:24px auto;padding:0 16px}
+    .grid{display:grid;gap:16px}
+    .grid-2{grid-template-columns:1fr 1fr}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:16px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .title{font-size:18px;font-weight:700;margin:0 0 8px}
+    .muted{color:var(--muted)}
+    input,button{background:#0b1220;border:1px solid #1f2937;border-radius:10px;color:var(--text);padding:8px}
+    label{display:inline-flex;align-items:center;gap:6px;margin-right:10px}
+    canvas{background:#0b1220;border-radius:12px;padding:8px}
+    .kpi{display:flex;gap:10px}
+    .kpi>div{background:#0b1220;border:1px solid #1f2937;border-radius:12px;padding:10px 12px}
+    .kpi .v{font-weight:800}
+  </style>
+</head>
+<body>
+  <div class="wrap grid" style="gap:20px">
+    <header class="row" style="justify-content:space-between;">
+      <div>
+        <h1 class="title">Kanye Sentiment Dashboard</h1>
+        <div class="muted">Flask API → /kpis, /series, /events</div>
+      </div>
+      <div class="muted">API: <code id="apiBase">http://127.0.0.1:5000</code></div>
+    </header>
+
+    <!-- Filtros -->
+    <section class="card">
+      <div class="row">
+        <div>
+          <div class="muted">Desde</div>
+          <input type="date" id="fromDate">
+        </div>
+        <div>
+          <div class="muted">Hasta</div>
+          <input type="date" id="toDate">
+        </div>
+        <div>
+          <div class="muted">Sentimientos</div>
+          <label><input type="checkbox" id="chkPos" checked> Positivo</label>
+          <label><input type="checkbox" id="chkNeg" checked> Negativo</label>
+          <label><input type="checkbox" id="chkNeu" checked> Neutro</label>
+        </div>
+        <button id="btnReset">Reset</button>
+      </div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="card kpi" id="kpiBar">
+      <div><div class="muted">Total</div><div id="k_total" class="v">—</div></div>
+      <div><div class="muted">Pos</div><div id="k_pos" class="v">—</div></div>
+      <div><div class="muted">Neg</div><div id="k_neg" class="v">—</div></div>
+      <div><div class="muted">Neu</div><div id="k_neu" class="v">—</div></div>
+      <div><div class="muted">Rango</div><div id="k_range" class="v">—</div></div>
+    </section>
+
+    <!-- Charts -->
+    <section class="grid grid-2">
+      <div class="card">
+        <div class="title">Polar Area — distribución actual</div>
+        <canvas id="polarChart" height="240"></canvas>
+      </div>
+      <div class="card">
+        <div class="title">Serie temporal — pos/neg/neu + eventos</div>
+        <canvas id="lineChart" height="240"></canvas>
+      </div>
+    </section>
+  </div>
+
+<script>
+<script>
+(async () => {
+  const API_BASE = document.getElementById('apiBase').textContent.trim();
+
+  // ====== Registro seguro de plugins (evita ReferenceError) ======
+  const maybeRegister = (plug) => { try { if (plug && plug.id) Chart.register(plug); } catch(_){} };
+  // Datalabels (UMD global: ChartDataLabels)
+  maybeRegister(window.ChartDataLabels);
+  // Annotation (algunas CDNs exponen ChartAnnotation, otras 'chartjs-plugin-annotation')
+  maybeRegister(window.ChartAnnotation || window['chartjs-plugin-annotation']);
+
+  // ====== Colores ======
+  const C_POS = 'rgba(34,197,94,0.8)';   // verde
+  const C_NEG = 'rgba(239,68,68,0.8)';   // rojo
+  const C_NEU = 'rgba(148,163,184,0.8)'; // gris
+
+  // ====== Helpers ======
+  const $ = (id) => document.getElementById(id);
+  const fromDate = $('fromDate');
+  const toDate   = $('toDate');
+  const chkPos   = $('chkPos');
+  const chkNeg   = $('chkNeg');
+  const chkNeu   = $('chkNeu');
+
+  async function fetchJSON(url){
+    try{
+      const r = await fetch(url, { cache: 'no-store' });
+      if(!r.ok){
+        const txt = await r.text().catch(()=>r.statusText);
+        throw new Error(`HTTP ${r.status} @ ${url} :: ${txt}`);
+      }
+      return r.json();
+    }catch(e){
+      console.error('fetchJSON error:', e);
+      return null;
+    }
+  }
+  const qs = (o) => {
+    const u = new URLSearchParams();
+    if (o.from) u.set('from', o.from);
+    if (o.to)   u.set('to',   o.to);
+    return u.toString();
+  };
+  const inRange = (d,a,b) => (!a || d>=a) && (!b || d<=b);
+
+  // ====== 1) Cargar /series para inicializar rango ======
+  const seriesAll = await fetchJSON(`${API_BASE}/series`);
+  if (!seriesAll || !Array.isArray(seriesAll) || !seriesAll.length){
+    console.warn('No llegaron datos de /series. Revisa CORS o el backend.');
+    // Evita que el script muera
+    return;
+  }
+  const allDays = seriesAll.map(d=>d.day).sort();
+  const MIN_DAY = allDays[0], MAX_DAY = allDays[allDays.length-1];
+  fromDate.min = MIN_DAY; fromDate.max = MAX_DAY; fromDate.value = MIN_DAY;
+  toDate.min   = MIN_DAY; toDate.max   = MAX_DAY; toDate.value   = MAX_DAY;
+
+  // ====== 2) Instanciar charts ======
+  // Polar
+  const polar = new Chart($('polarChart'), {
+    type: 'polarArea',
+    data: { labels: ['Positivo','Negativo','Neutro'],
+            datasets: [{ data:[0,0,0], backgroundColor:[C_POS,C_NEG,C_NEU], borderWidth:2 }] },
+    options: {
+      responsive:true,
+      plugins:{
+        legend:{ labels:{ color:'#e5e7eb' }},
+        // Si no está datalabels, no pasa nada
+        datalabels: { color:'#fff', font:{weight:'bold',size:14},
+          formatter:(v,ctx)=>ctx.chart.data.labels[ctx.dataIndex] }
+      },
+      scales:{ r:{ angleLines:{color:'rgba(255,255,255,0.1)'},
+                   grid:{color:'rgba(255,255,255,0.1)'},
+                   ticks:{color:'#e5e7eb'},
+                   pointLabels:{color:'#e5e7eb'} } }
+    }
+  });
+
+  // Línea
+  const line = new Chart($('lineChart'), {
+    type: 'line',
+    data: { labels: [], datasets: [
+      {label:'Pos', data:[], borderColor:C_POS, tension:0.2, pointRadius:0},
+      {label:'Neg', data:[], borderColor:C_NEG, tension:0.2, pointRadius:0},
+      {label:'Neu', data:[], borderColor:C_NEU, tension:0.2, pointRadius:0},
+    ]},
+    options:{
+      responsive:true,
+      plugins:{
+        legend:{ labels:{ color:'#e5e7eb' }},
+        // Si no está annotation, simplemente no habrá líneas de eventos
+        annotation:{ annotations:{} }
+      },
+      scales:{
+        x:{ ticks:{ color:'#e5e7eb' }, grid:{color:'rgba(255,255,255,0.06)'} },
+        y:{ ticks:{ color:'#e5e7eb' }, grid:{color:'rgba(255,255,255,0.06)'} }
+      }
+    }
+  });
+
+  // ====== 3) Carga según filtros ======
+  async function loadKpis(from, to){
+    // Intentar backend con filtros; si falla, calcular desde series
+    const data = await fetchJSON(`${API_BASE}/kpis?${qs({from,to})}`);
+    if (data) return data;
+    const filtered = seriesAll.filter(d=>inRange(d.day, from, to));
+    return {
+      total_pos: filtered.reduce((a,x)=>a+(x.pos||0),0),
+      total_neg: filtered.reduce((a,x)=>a+(x.neg||0),0),
+      total_neu: filtered.reduce((a,x)=>a+(x.neu||0),0
+
+</script>
+</body>
+</html>

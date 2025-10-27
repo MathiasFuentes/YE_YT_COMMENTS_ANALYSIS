@@ -11,8 +11,7 @@ import os
 import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
-
-DB_PATH   = os.environ.get("DB_PATH", r"C:\Users\matia\Desktop\analysis.db\databaser.db")
+DB_PATH = os.getenv("DATABASE_URL", "./data/databaser.db")
 SOURCE    = os.environ.get("SOURCE", "all")           # 'youtube' | 'reddit' | 'all'
 FROM_DATE = os.environ.get("FROM_DATE", "2020-01-01")
 TO_DATE   = os.environ.get("TO_DATE",   "2022-12-31")
