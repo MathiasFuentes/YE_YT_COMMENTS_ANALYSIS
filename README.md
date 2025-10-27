@@ -11,7 +11,7 @@ Su objetivo es desarrollar una aplicación web multiparadigma que permita lo sig
 - Visualizar de forma interactiva la evolución temporal del sentimiento y su relación con  eventos mediáticos relevantes.
   
 ---
-El proyecto integra distintos **paradigmas de programación**:  
+El proyecto integra distintos **paradigmas de programación** los cuales son los siguientes:  
 - **Imperativo / Procedimental:**
   Ingesta y clasificación implementadas paso a paso en scripts Python     (staging_insert_yt.py, score_all_roBERTa.py).
   
