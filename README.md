@@ -90,7 +90,6 @@ Posteriormente, cada comentario se somete a un análisis de sentimiento mediante
 El dataset final, por tanto, es una versión enriquecida de los comentarios originales de YouTube, que combina datos reales obtenidos de la plataforma con resultados inferidos por el modelo de lenguaje.
 Todo el proceso respeta las políticas de uso de datos de la API de YouTube, utilizando únicamente información pública con fines académicos y de investigación.
 
-
 ---
 
 ## Instrucciones de ejecución
