@@ -80,7 +80,6 @@
   </div>
 
 <script>
-<script>
 (async () => {
   const API_BASE = document.getElementById('apiBase').textContent.trim();
 
@@ -129,7 +128,6 @@
   const seriesAll = await fetchJSON(`${API_BASE}/series`);
   if (!seriesAll || !Array.isArray(seriesAll) || !seriesAll.length){
     console.warn('No llegaron datos de /series. Revisa CORS o el backend.');
-    // Evita que el script muera
     return;
   }
   const allDays = seriesAll.map(d=>d.day).sort();
@@ -147,7 +145,6 @@
       responsive:true,
       plugins:{
         legend:{ labels:{ color:'#e5e7eb' }},
-        // Si no está datalabels, no pasa nada
         datalabels: { color:'#fff', font:{weight:'bold',size:14},
           formatter:(v,ctx)=>ctx.chart.data.labels[ctx.dataIndex] }
       },
@@ -170,7 +167,6 @@
       responsive:true,
       plugins:{
         legend:{ labels:{ color:'#e5e7eb' }},
-        // Si no está annotation, simplemente no habrá líneas de eventos
         annotation:{ annotations:{} }
       },
       scales:{
@@ -182,15 +178,127 @@
 
   // ====== 3) Carga según filtros ======
   async function loadKpis(from, to){
-    // Intentar backend con filtros; si falla, calcular desde series
     const data = await fetchJSON(`${API_BASE}/kpis?${qs({from,to})}`);
     if (data) return data;
     const filtered = seriesAll.filter(d=>inRange(d.day, from, to));
     return {
       total_pos: filtered.reduce((a,x)=>a+(x.pos||0),0),
       total_neg: filtered.reduce((a,x)=>a+(x.neg||0),0),
-      total_neu: filtered.reduce((a,x)=>a+(x.neu||0),0
+      total_neu: filtered.reduce((a,x)=>a+(x.neu||0),0),
+      total_comments: filtered.reduce((a,x)=>a+(x.total||0),0)
+    };
+  }
 
+  async function loadSeries(from, to){
+    const data = await fetchJSON(`${API_BASE}/series?${qs({from,to})}`);
+    if (data && Array.isArray(data)) return data;
+    return seriesAll.filter(d=>inRange(d.day, from, to));
+  }
+
+  async function loadEvents(){
+    const data = await fetchJSON(`${API_BASE}/events`);
+    return Array.isArray(data) ? data : [];
+  }
+
+  // ====== 4) Actualizar UI ======
+  function updateKpis(kpis){
+    const total = kpis.total_comments || (kpis.total_pos + kpis.total_neg + kpis.total_neu);
+    $('k_total').textContent = total.toLocaleString();
+    $('k_pos').textContent = kpis.total_pos.toLocaleString();
+    $('k_neg').textContent = kpis.total_neg.toLocaleString();
+    $('k_neu').textContent = kpis.total_neu.toLocaleString();
+
+    const from = fromDate.value || MIN_DAY;
+    const to = toDate.value || MAX_DAY;
+    $('k_range').textContent = from === to ? from : `${from} → ${to}`;
+  }
+
+  function updateCharts(series, events){
+    // Filtrar por checkboxes
+    const showPos = chkPos.checked;
+    const showNeg = chkNeg.checked;
+    const showNeu = chkNeu.checked;
+
+    // Polar: suma total en el rango
+    const sumPos = series.reduce((a,x)=>a+(x.pos||0),0);
+    const sumNeg = series.reduce((a,x)=>a+(x.neg||0),0);
+    const sumNeu = series.reduce((a,x)=>a+(x.neu||0),0);
+
+    polar.data.datasets[0].data = [
+      showPos ? sumPos : 0,
+      showNeg ? sumNeg : 0,
+      showNeu ? sumNeu : 0
+    ];
+    polar.update();
+
+    // Línea temporal
+    line.data.labels = series.map(d=>d.day);
+    line.data.datasets[0].data = showPos ? series.map(d=>d.pos||0) : [];
+    line.data.datasets[1].data = showNeg ? series.map(d=>d.neg||0) : [];
+    line.data.datasets[2].data = showNeu ? series.map(d=>d.neu||0) : [];
+
+    // Agregar anotaciones de eventos
+    const annotations = {};
+    events.forEach((evt, i) => {
+      if (evt.event_date) {
+        annotations[`evt${i}`] = {
+          type: 'line',
+          scaleID: 'x',
+          value: evt.event_date,
+          borderColor: 'rgba(255,206,86,0.8)',
+          borderWidth: 2,
+          borderDash: [5, 5],
+          label: {
+            display: true,
+            content: evt.title || 'Evento',
+            position: 'start',
+            backgroundColor: 'rgba(255,206,86,0.8)',
+            color: '#000'
+          }
+        };
+      }
+    });
+
+    if (line.options.plugins.annotation) {
+      line.options.plugins.annotation.annotations = annotations;
+    }
+    line.update();
+  }
+
+  // ====== 5) Refresh data ======
+  async function refresh(){
+    const from = fromDate.value || null;
+    const to = toDate.value || null;
+
+    const [kpis, series, events] = await Promise.all([
+      loadKpis(from, to),
+      loadSeries(from, to),
+      loadEvents()
+    ]);
+
+    updateKpis(kpis);
+    updateCharts(series, events);
+  }
+
+  // ====== 6) Event listeners ======
+  fromDate.addEventListener('change', refresh);
+  toDate.addEventListener('change', refresh);
+  chkPos.addEventListener('change', refresh);
+  chkNeg.addEventListener('change', refresh);
+  chkNeu.addEventListener('change', refresh);
+
+  $('btnReset').addEventListener('click', () => {
+    fromDate.value = MIN_DAY;
+    toDate.value = MAX_DAY;
+    chkPos.checked = true;
+    chkNeg.checked = true;
+    chkNeu.checked = true;
+    refresh();
+  });
+
+  // ====== 7) Carga inicial ======
+  await refresh();
+})();
 </script>
 </body>
 </html>
