@@ -7,8 +7,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
   <style>
-    :root{--bg:#0f172a;--card:#111827;--muted:#9ca3af;--text:#e5e7eb;}
+    :root{--bg:#0f172a;--card:#111827;--muted:#9ca3af;--text:#e5e7eb;--error:#ef4444;}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
     .wrap{max-width:1200px;margin:24px auto;padding:0 16px}
@@ -18,12 +20,18 @@
     .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
     .title{font-size:18px;font-weight:700;margin:0 0 8px}
     .muted{color:var(--muted)}
-    input,button{background:#0b1220;border:1px solid #1f2937;border-radius:10px;color:var(--text);padding:8px}
+    input,button,select{background:#0b1220;border:1px solid #1f2937;border-radius:10px;color:var(--text);padding:8px}
+    select{cursor:pointer}
     label{display:inline-flex;align-items:center;gap:6px;margin-right:10px}
     canvas{background:#0b1220;border-radius:12px;padding:8px}
     .kpi{display:flex;gap:10px}
     .kpi>div{background:#0b1220;border:1px solid #1f2937;border-radius:12px;padding:10px 12px}
     .kpi .v{font-weight:800}
+    .error-msg{color:var(--error);font-size:12px;margin-top:4px;display:none}
+    .error-msg.show{display:block}
+    input.error{border-color:var(--error)}
+    .date-group{display:flex;flex-direction:column;gap:4px}
+    .chart-controls{display:flex;gap:10px;align-items:center;margin-bottom:10px;padding:8px;background:#0b1220;border-radius:8px;flex-wrap:wrap}
   </style>
 </head>
 <body>
@@ -39,13 +47,15 @@
     <!-- Filtros -->
     <section class="card">
       <div class="row">
-        <div>
+        <div class="date-group">
           <div class="muted">Desde</div>
           <input type="date" id="fromDate">
+          <span class="error-msg" id="fromError"></span>
         </div>
-        <div>
+        <div class="date-group">
           <div class="muted">Hasta</div>
           <input type="date" id="toDate">
+          <span class="error-msg" id="toError"></span>
         </div>
         <div>
           <div class="muted">Sentimientos</div>
@@ -73,7 +83,28 @@
         <canvas id="polarChart" height="240"></canvas>
       </div>
       <div class="card">
-        <div class="title">Serie temporal — pos/neg/neu + eventos</div>
+        <div class="title">Serie temporal — optimizada</div>
+        <div class="chart-controls">
+          <label style="margin:0">
+            <span class="muted">Interpolación:</span>
+            <select id="interpolationMode">
+              <option value="linear">Linear</option>
+              <option value="monotone">Cubic (monotone)</option>
+              <option value="default">Cubic (default)</option>
+              <option value="step-before">Step Before</option>
+              <option value="step-after">Step After</option>
+              <option value="step-middle">Step Middle</option>
+            </select>
+          </label>
+          <label style="margin:0">
+            <input type="checkbox" id="showPoints">
+            Mostrar puntos
+          </label>
+          <label style="margin:0">
+            <input type="checkbox" id="showEvents" checked>
+            Mostrar eventos
+          </label>
+        </div>
         <canvas id="lineChart" height="240"></canvas>
       </div>
     </section>
@@ -83,25 +114,150 @@
 (async () => {
   const API_BASE = document.getElementById('apiBase').textContent.trim();
 
-  // ====== Registro seguro de plugins (evita ReferenceError) ======
+  // ====== Constantes de rango de datos ======
+  const ABSOLUTE_MIN_DATE = '2020-10-24';
+  const ABSOLUTE_MAX_DATE = '2025-10-23';
+  const MIN_EVENT_DISTANCE_DAYS = 30; // Distancia mínima entre eventos en días
+
+  // ====== Registro seguro de plugins ======
   const maybeRegister = (plug) => { try { if (plug && plug.id) Chart.register(plug); } catch(_){} };
-  // Datalabels (UMD global: ChartDataLabels)
   maybeRegister(window.ChartDataLabels);
-  // Annotation (algunas CDNs exponen ChartAnnotation, otras 'chartjs-plugin-annotation')
   maybeRegister(window.ChartAnnotation || window['chartjs-plugin-annotation']);
 
   // ====== Colores ======
-  const C_POS = 'rgba(34,197,94,0.8)';   // verde
-  const C_NEG = 'rgba(239,68,68,0.8)';   // rojo
-  const C_NEU = 'rgba(148,163,184,0.8)'; // gris
+  const C_POS = 'rgba(34,197,94,0.8)';
+  const C_NEG = 'rgba(239,68,68,0.8)';
+  const C_NEU = 'rgba(148,163,184,0.8)';
 
   // ====== Helpers ======
   const $ = (id) => document.getElementById(id);
   const fromDate = $('fromDate');
   const toDate   = $('toDate');
+  const fromError = $('fromError');
+  const toError = $('toError');
   const chkPos   = $('chkPos');
   const chkNeg   = $('chkNeg');
   const chkNeu   = $('chkNeu');
+  const interpolationMode = $('interpolationMode');
+  const showPoints = $('showPoints');
+  const showEvents = $('showEvents');
+
+  // Almacenamiento de eventos completos
+  let allEvents = [];
+
+  // ====== Funciones de validación ======
+  function validateDateRange() {
+    let isValid = true;
+    
+    fromDate.classList.remove('error');
+    toDate.classList.remove('error');
+    fromError.classList.remove('show');
+    toError.classList.remove('show');
+
+    const from = fromDate.value;
+    const to = toDate.value;
+
+    if (from) {
+      if (from < ABSOLUTE_MIN_DATE) {
+        fromDate.classList.add('error');
+        fromError.textContent = `Fecha mínima: ${ABSOLUTE_MIN_DATE}`;
+        fromError.classList.add('show');
+        fromDate.value = ABSOLUTE_MIN_DATE;
+        isValid = false;
+      } else if (from > ABSOLUTE_MAX_DATE) {
+        fromDate.classList.add('error');
+        fromError.textContent = `Fecha máxima: ${ABSOLUTE_MAX_DATE}`;
+        fromError.classList.add('show');
+        fromDate.value = ABSOLUTE_MAX_DATE;
+        isValid = false;
+      }
+    }
+
+    if (to) {
+      if (to < ABSOLUTE_MIN_DATE) {
+        toDate.classList.add('error');
+        toError.textContent = `Fecha mínima: ${ABSOLUTE_MIN_DATE}`;
+        toError.classList.add('show');
+        toDate.value = ABSOLUTE_MIN_DATE;
+        isValid = false;
+      } else if (to > ABSOLUTE_MAX_DATE) {
+        toDate.classList.add('error');
+        toError.textContent = `Fecha máxima: ${ABSOLUTE_MAX_DATE}`;
+        toError.classList.add('show');
+        toDate.value = ABSOLUTE_MAX_DATE;
+        isValid = false;
+      }
+    }
+
+    if (from && to && from > to) {
+      toDate.classList.add('error');
+      toError.textContent = 'La fecha "hasta" debe ser posterior a "desde"';
+      toError.classList.add('show');
+      isValid = false;
+    }
+
+    return isValid;
+  }
+
+  // ====== Función para filtrar eventos por densidad ======
+  function filterEventsByDensity(events, fromDateStr, toDateStr) {
+    if (!events || events.length === 0) return [];
+    
+    // Filtrar eventos dentro del rango
+    const eventsInRange = events.filter(evt => {
+      if (!evt.event_date) return false;
+      return (!fromDateStr || evt.event_date >= fromDateStr) && 
+             (!toDateStr || evt.event_date <= toDateStr);
+    });
+
+    // Ordenar por fecha
+    const sortedEvents = eventsInRange.sort((a, b) => 
+      a.event_date.localeCompare(b.event_date)
+    );
+
+    // Calcular rango de días
+    if (sortedEvents.length === 0) return [];
+    
+    const firstDate = new Date(fromDateStr || ABSOLUTE_MIN_DATE);
+    const lastDate = new Date(toDateStr || ABSOLUTE_MAX_DATE);
+    const rangeDays = (lastDate - firstDate) / (1000 * 60 * 60 * 24);
+
+    // Si el rango es menor a 90 días, mostrar todos
+    if (rangeDays < 90) return sortedEvents;
+
+    // Si el rango es mayor, filtrar por distancia mínima
+    const filtered = [];
+    let lastEventDate = null;
+
+    for (const evt of sortedEvents) {
+      if (!lastEventDate) {
+        filtered.push(evt);
+        lastEventDate = new Date(evt.event_date);
+      } else {
+        const currentDate = new Date(evt.event_date);
+        const daysDiff = (currentDate - lastEventDate) / (1000 * 60 * 60 * 24);
+        
+        if (daysDiff >= MIN_EVENT_DISTANCE_DAYS) {
+          filtered.push(evt);
+          lastEventDate = currentDate;
+        }
+      }
+    }
+
+    return filtered;
+  }
+
+  // ====== Función para determinar unidad de tiempo ======
+  function getTimeUnit(fromDateStr, toDateStr) {
+    const from = new Date(fromDateStr || ABSOLUTE_MIN_DATE);
+    const to = new Date(toDateStr || ABSOLUTE_MAX_DATE);
+    const days = (to - from) / (1000 * 60 * 60 * 24);
+
+    if (days <= 31) return 'day';
+    if (days <= 90) return 'week';
+    if (days <= 365) return 'month';
+    return 'month';
+  }
 
   async function fetchJSON(url){
     try{
@@ -116,27 +272,39 @@
       return null;
     }
   }
+  
   const qs = (o) => {
     const u = new URLSearchParams();
     if (o.from) u.set('from', o.from);
     if (o.to)   u.set('to',   o.to);
     return u.toString();
   };
+  
   const inRange = (d,a,b) => (!a || d>=a) && (!b || d<=b);
 
-  // ====== 1) Cargar /series para inicializar rango ======
-  const seriesAll = await fetchJSON(`${API_BASE}/series`);
-  if (!seriesAll || !Array.isArray(seriesAll) || !seriesAll.length){
-    console.warn('No llegaron datos de /series. Revisa CORS o el backend.');
-    return;
-  }
-  const allDays = seriesAll.map(d=>d.day).sort();
-  const MIN_DAY = allDays[0], MAX_DAY = allDays[allDays.length-1];
-  fromDate.min = MIN_DAY; fromDate.max = MAX_DAY; fromDate.value = MIN_DAY;
-  toDate.min   = MIN_DAY; toDate.max   = MAX_DAY; toDate.value   = MAX_DAY;
+  // ====== 1) Configurar inputs de fecha con límites absolutos ======
+  fromDate.min = ABSOLUTE_MIN_DATE;
+  fromDate.max = ABSOLUTE_MAX_DATE;
+  fromDate.value = ABSOLUTE_MIN_DATE;
+  
+  toDate.min = ABSOLUTE_MIN_DATE;
+  toDate.max = ABSOLUTE_MAX_DATE;
+  toDate.value = ABSOLUTE_MAX_DATE;
 
-  // ====== 2) Instanciar charts ======
-  // Polar
+  // ====== 2) Cargar /series para datos dinámicos ======
+  const seriesAll = await fetchJSON(`${API_BASE}/series`);
+  let MIN_DAY = ABSOLUTE_MIN_DATE;
+  let MAX_DAY = ABSOLUTE_MAX_DATE;
+  
+  if (seriesAll && Array.isArray(seriesAll) && seriesAll.length) {
+    const allDays = seriesAll.map(d=>d.day).sort();
+    MIN_DAY = allDays[0];
+    MAX_DAY = allDays[allDays.length-1];
+  } else {
+    console.warn('No llegaron datos de /series. Usando fechas absolutas.');
+  }
+
+  // ====== 3) Instanciar charts ======
   const polar = new Chart($('polarChart'), {
     type: 'polarArea',
     data: { labels: ['Positivo','Negativo','Neutro'],
@@ -155,31 +323,108 @@
     }
   });
 
-  // Línea
   const line = new Chart($('lineChart'), {
     type: 'line',
-    data: { labels: [], datasets: [
-      {label:'Pos', data:[], borderColor:C_POS, tension:0.2, pointRadius:0},
-      {label:'Neg', data:[], borderColor:C_NEG, tension:0.2, pointRadius:0},
-      {label:'Neu', data:[], borderColor:C_NEU, tension:0.2, pointRadius:0},
-    ]},
+    data: { 
+      datasets: [
+        {label:'Pos', data:[], borderColor:C_POS, borderWidth:2, tension:0, pointRadius:0, 
+         cubicInterpolationMode:'default', stepped:false, parsing: false},
+        {label:'Neg', data:[], borderColor:C_NEG, borderWidth:2, tension:0, pointRadius:0, 
+         cubicInterpolationMode:'default', stepped:false, parsing: false},
+        {label:'Neu', data:[], borderColor:C_NEU, borderWidth:2, tension:0, pointRadius:0, 
+         cubicInterpolationMode:'default', stepped:false, parsing: false},
+      ]
+    },
     options:{
       responsive:true,
+      parsing: false,
+      normalized: true,
       plugins:{
         legend:{ labels:{ color:'#e5e7eb' }},
-        annotation:{ annotations:{} }
+        annotation:{ annotations:{} },
+        decimation: {
+          enabled: true,
+          algorithm: 'lttb',
+          samples: 500,
+          threshold: 1000
+        }
       },
       scales:{
-        x:{ ticks:{ color:'#e5e7eb' }, grid:{color:'rgba(255,255,255,0.06)'} },
-        y:{ ticks:{ color:'#e5e7eb' }, grid:{color:'rgba(255,255,255,0.06)'} }
+        x:{ 
+          type: 'time',
+          time: {
+            unit: 'month',
+            displayFormats: {
+              day: 'MMM dd',
+              week: 'MMM dd',
+              month: 'MMM yyyy',
+              quarter: 'MMM yyyy',
+              year: 'yyyy'
+            }
+          },
+          ticks: { 
+            color:'#e5e7eb',
+            maxRotation: 45,
+            minRotation: 45
+          }, 
+          grid:{color:'rgba(255,255,255,0.06)'}
+        },
+        y:{ 
+          ticks:{ color:'#e5e7eb' }, 
+          grid:{color:'rgba(255,255,255,0.06)'}
+        }
       }
     }
   });
 
-  // ====== 3) Carga según filtros ======
+  // ====== Función para actualizar modo de interpolación ======
+  function updateInterpolationMode() {
+    const mode = interpolationMode.value;
+    const pointRadius = showPoints.checked ? 3 : 0;
+    
+    line.data.datasets.forEach(dataset => {
+      dataset.pointRadius = pointRadius;
+      dataset.pointHoverRadius = pointRadius > 0 ? pointRadius + 2 : 0;
+      
+      // Resetear configuraciones
+      dataset.stepped = false;
+      dataset.tension = 0;
+      dataset.cubicInterpolationMode = 'default';
+      
+      switch(mode) {
+        case 'linear':
+          dataset.tension = 0;
+          break;
+        case 'monotone':
+          dataset.cubicInterpolationMode = 'monotone';
+          dataset.tension = 0.4;
+          break;
+        case 'default':
+          dataset.cubicInterpolationMode = 'default';
+          dataset.tension = 0.4;
+          break;
+        case 'step-before':
+          dataset.stepped = 'before';
+          break;
+        case 'step-after':
+          dataset.stepped = 'after';
+          break;
+        case 'step-middle':
+          dataset.stepped = 'middle';
+          break;
+      }
+    });
+    
+    line.update('none');
+  }
+
+  // ====== 4) Carga según filtros ======
   async function loadKpis(from, to){
     const data = await fetchJSON(`${API_BASE}/kpis?${qs({from,to})}`);
     if (data) return data;
+    
+    if (!seriesAll) return { total_pos:0, total_neg:0, total_neu:0, total_comments:0 };
+    
     const filtered = seriesAll.filter(d=>inRange(d.day, from, to));
     return {
       total_pos: filtered.reduce((a,x)=>a+(x.pos||0),0),
@@ -192,6 +437,8 @@
   async function loadSeries(from, to){
     const data = await fetchJSON(`${API_BASE}/series?${qs({from,to})}`);
     if (data && Array.isArray(data)) return data;
+    
+    if (!seriesAll) return [];
     return seriesAll.filter(d=>inRange(d.day, from, to));
   }
 
@@ -200,7 +447,7 @@
     return Array.isArray(data) ? data : [];
   }
 
-  // ====== 4) Actualizar UI ======
+  // ====== 5) Actualizar UI ======
   function updateKpis(kpis){
     const total = kpis.total_comments || (kpis.total_pos + kpis.total_neg + kpis.total_neu);
     $('k_total').textContent = total.toLocaleString();
@@ -214,12 +461,10 @@
   }
 
   function updateCharts(series, events){
-    // Filtrar por checkboxes
     const showPos = chkPos.checked;
     const showNeg = chkNeg.checked;
     const showNeu = chkNeu.checked;
 
-    // Polar: suma total en el rango
     const sumPos = series.reduce((a,x)=>a+(x.pos||0),0);
     const sumNeg = series.reduce((a,x)=>a+(x.neg||0),0);
     const sumNeu = series.reduce((a,x)=>a+(x.neu||0),0);
@@ -231,42 +476,66 @@
     ];
     polar.update();
 
-    // Línea temporal
-    line.data.labels = series.map(d=>d.day);
-    line.data.datasets[0].data = showPos ? series.map(d=>d.pos||0) : [];
-    line.data.datasets[1].data = showNeg ? series.map(d=>d.neg||0) : [];
-    line.data.datasets[2].data = showNeu ? series.map(d=>d.neu||0) : [];
+    // Convertir datos a formato {x: timestamp, y: value} para time scale
+    const seriesData = series.map(d => ({
+      x: new Date(d.day).getTime(),
+      y: d
+    }));
 
-    // Agregar anotaciones de eventos
+    line.data.datasets[0].data = showPos ? seriesData.map(d=>({x:d.x, y:d.y.pos||0})) : [];
+    line.data.datasets[1].data = showNeg ? seriesData.map(d=>({x:d.x, y:d.y.neg||0})) : [];
+    line.data.datasets[2].data = showNeu ? seriesData.map(d=>({x:d.x, y:d.y.neu||0})) : [];
+
+    // Actualizar unidad de tiempo según rango
+    const timeUnit = getTimeUnit(fromDate.value, toDate.value);
+    line.options.scales.x.time.unit = timeUnit;
+
+    // Filtrar y agregar anotaciones de eventos
     const annotations = {};
-    events.forEach((evt, i) => {
-      if (evt.event_date) {
-        annotations[`evt${i}`] = {
-          type: 'line',
-          scaleID: 'x',
-          value: evt.event_date,
-          borderColor: 'rgba(255,206,86,0.8)',
-          borderWidth: 2,
-          borderDash: [5, 5],
-          label: {
-            display: true,
-            content: evt.title || 'Evento',
-            position: 'start',
-            backgroundColor: 'rgba(255,206,86,0.8)',
-            color: '#000'
-          }
-        };
-      }
-    });
+    
+    if (showEvents.checked) {
+      const filteredEvents = filterEventsByDensity(events, fromDate.value, toDate.value);
+      
+      filteredEvents.forEach((evt, i) => {
+        if (evt.event_date) {
+          annotations[`evt${i}`] = {
+            type: 'line',
+            scaleID: 'x',
+            value: new Date(evt.event_date).getTime(),
+            borderColor: 'rgba(255,206,86,0.8)',
+            borderWidth: 2,
+            borderDash: [5, 5],
+            label: {
+              display: true,
+              content: (evt.title || 'Evento').substring(0, 20),
+              position: 'start',
+              backgroundColor: 'rgba(255,206,86,0.9)',
+              color: '#000',
+              font: {
+                size: 10,
+                weight: 'bold'
+              },
+              padding: 4
+            }
+          };
+        }
+      });
+    }
 
     if (line.options.plugins.annotation) {
       line.options.plugins.annotation.annotations = annotations;
     }
-    line.update();
+    
+    updateInterpolationMode();
   }
 
-  // ====== 5) Refresh data ======
+  // ====== 6) Refresh data ======
   async function refresh(){
+    if (!validateDateRange()) {
+      setTimeout(refresh, 500);
+      return;
+    }
+
     const from = fromDate.value || null;
     const to = toDate.value || null;
 
@@ -276,16 +545,54 @@
       loadEvents()
     ]);
 
+    allEvents = events;
     updateKpis(kpis);
     updateCharts(series, events);
   }
 
-  // ====== 6) Event listeners ======
-  fromDate.addEventListener('change', refresh);
-  toDate.addEventListener('change', refresh);
-  chkPos.addEventListener('change', refresh);
-  chkNeg.addEventListener('change', refresh);
-  chkNeu.addEventListener('change', refresh);
+  // ====== 7) Event listeners ======
+  fromDate.addEventListener('change', () => {
+    validateDateRange();
+    refresh();
+  });
+  
+  toDate.addEventListener('change', () => {
+    validateDateRange();
+    refresh();
+  });
+  
+  fromDate.addEventListener('blur', validateDateRange);
+  toDate.addEventListener('blur', validateDateRange);
+  
+  chkPos.addEventListener('change', () => {
+    updateCharts(
+      seriesAll ? seriesAll.filter(d=>inRange(d.day, fromDate.value, toDate.value)) : [],
+      allEvents
+    );
+  });
+  
+  chkNeg.addEventListener('change', () => {
+    updateCharts(
+      seriesAll ? seriesAll.filter(d=>inRange(d.day, fromDate.value, toDate.value)) : [],
+      allEvents
+    );
+  });
+  
+  chkNeu.addEventListener('change', () => {
+    updateCharts(
+      seriesAll ? seriesAll.filter(d=>inRange(d.day, fromDate.value, toDate.value)) : [],
+      allEvents
+    );
+  });
+  
+  interpolationMode.addEventListener('change', updateInterpolationMode);
+  showPoints.addEventListener('change', updateInterpolationMode);
+  showEvents.addEventListener('change', () => {
+    updateCharts(
+      seriesAll ? seriesAll.filter(d=>inRange(d.day, fromDate.value, toDate.value)) : [],
+      allEvents
+    );
+  });
 
   $('btnReset').addEventListener('click', () => {
     fromDate.value = MIN_DAY;
@@ -293,10 +600,15 @@
     chkPos.checked = true;
     chkNeg.checked = true;
     chkNeu.checked = true;
+    interpolationMode.value = 'linear';
+    showPoints.checked = false;
+    showEvents.checked = true;
+    validateDateRange();
     refresh();
   });
 
-  // ====== 7) Carga inicial ======
+  // ====== 8) Carga inicial ======
+  validateDateRange();
   await refresh();
 })();
 </script>
