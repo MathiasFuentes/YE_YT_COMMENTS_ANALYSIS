@@ -5,7 +5,8 @@ from tqdm import tqdm
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, TextClassificationPipeline
 
-DB_PATH = r"C:\Users\matia\Desktop\analysis.db\databaser.db"  # <-- AJUSTA RUTA SI ES NECESARIO
+DB_PATH = os.getenv("DATABASE_URL", "./data/databaser.db")
+# DB_PATH = r"C:\Users\matia\Desktop\analysis.db\databaser.db"  # <-- AJUSTA RUTA SI ES NECESARIO
 MODEL_NAME = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 PIPE_MODEL_NAME = "cardiffnlp/twitter-roberta-base-sentiment-latest"  # lo guardaremos así en 'scores.model_name'
 
