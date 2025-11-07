@@ -1,70 +1,103 @@
-# Scraper + Analítica Web: Análisis de Sentimiento sobre Kanye West
 
-##  Descripción
-Este proyecto corresponde al **Proyecto final de la asignatura Paradigmas de Programación**.  
-El objetivo es desarrollar una **aplicación web multiparadigma** que permita recolectar publicaciones reales desde la red social **X (antes Twitter)**, procesarlas mediante **NLP (análisis de sentimiento)** y visualizar de forma interactiva la **evolución del sentimiento público** hacia una figura controversial, en este caso **Kanye West**, durante el periodo **2020–2022**.  
 
-El proyecto integra distintos **paradigmas de programación**:  
-- **Orientado a Objetos (POO):** para modelar entidades como Tweet, Usuario y Analizador de Sentimiento.  
-- **Funcional:** para implementar el pipeline de procesamiento de texto (limpieza → análisis → clasificación).  
-- **Estructurado (procedural):** para la orquestación de tareas de scraping, almacenamiento y visualización.  
+# Dashboard de Sentimiento (Kanye West)
+Por Néstor Calderón y Matías Fuentes 
+## Descripción
 
-Se busca no solo mostrar “qué opina la gente”, sino también analizar la **dinámica temporal**, la **intensidad de interacciones** y la **relación con eventos relevantes** (noticias, lanzamientos o controversias).
+Aplicación multiparadigma que:
 
----
+* Lee **comentarios reales de YouTube** (video *JRE #1554 – Kanye West*) ya cargados en **SQLite**.
+* Usa clasificaciones de sentimiento **precalculadas** (`pos/neg/neu`) almacenadas en `scores`.
+* Expone una **API Flask** (`/series`, `/kpis`, `/events`) y un **dashboard** (Chart.js).
 
-## Instrucciones de ejecución
-
-> Nota: estas instrucciones son preliminares y se irán ajustando a medida que avance el desarrollo.
-
-1. **Clonar el repositorio**  
-   ```bash
-   git clone <https://github.com/MathiasFuentes/ye_x_analysis>
-   cd <carpeta-del-repo>
-    ````
-
-2. **Crear un entorno virtual e instalar dependencias**
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate   # Linux/Mac
-   venv\Scripts\activate      # Windows
-
-   pip install -r requirements.txt
-   ```
-
-3. **Ejecutar el scraper para recolectar datos**
-
-   * El scraper usa [`snscrape`](https://github.com/JustAnotherArchivist/snscrape) para obtener tweets reales sobre Kanye West (2020–2022).
-   * Los resultados se almacenan en formato **CSV** dentro de la carpeta `data/`.
-
-4. **Procesar los datos con NLP**
-
-   * Se aplicará un modelo preentrenado de análisis de sentimiento (`cardiffnlp/twitter-roberta-base-sentiment-latest`).
-   * El procesamiento generará nuevas columnas (`sentiment_label`, `sentiment_score`).
-
-5. **Visualizar resultados**
-
-    * Se incluirá un dashboard web interactivo desarrollado con Flask y Chart.js, que mostrará:
-
-    *   Evolución del sentimiento en el tiempo (positivo, negativo y neutro).
-
-    * Volumen de interacciones (likes, retweets, respuestas, citas).
-
-    * Eventos destacados en la línea de tiempo, relacionados con la actividad y controversias de Kanye West.
+> **No** necesitas clave de YouTube: la base `databaser.db` ya viene poblada.
 
 ---
 
-##  Integrantes
+## Estructura
 
-* **Matías Fuentes**
-* **Néstor Calderón**
-* **Sofía Ríos**
+```
+YE_YT_COMMENTS_ANALYSIS/
+├─ backend/
+│  └─ app.py            # API Flask (series, kpis, events, health, _debug/db)
+├─ scripts/             # (opcional) ingesta/clasificación usadas para construir la BD
+├─ data/
+│  └─ databaser.db      # SQLite con posts, scores, events, aggregates, etc.
+├─ frontend/
+│  └─ index.html        # Dashboard Chart.js (polar + línea + filtros)
+└─ .env                 # Config (ruta BD y puerto)
+```
 
 ---
 
-##  Licencia y uso de datos
+## Requisitos
 
-* Los datos recolectados provienen de la red social **X (antes Twitter)** a través de `snscrape`.
-* En cumplimiento de los **Términos de Servicio de X**, este repositorio no compartirá texto crudo de los tweets.
-* Se publicarán únicamente **IDs de tweets y métricas agregadas**, suficientes para fines académicos.
+* Python 3.10+
+* Dependencias (`pip install -r requirements.txt`)
+
+  * Flask, flask-cors, python-dotenv, sqlite3 (stdlib), chart.js en el frontend (CDN)
+
+---
+
+## Configuración
+
+Crea/edita **.env** en la raíz (sin API keys):
+
+```env
+# Ruta ABSOLUTA o relativa a la raíz del repo
+DATABASE_URL=./data/databaser.db
+FLASK_RUN_PORT=5000
+```
+
+---
+
+## Ejecución
+
+1. **Backend**
+
+```bash
+cd backend
+flask run
+# -> http://127.0.0.1:5000
+```
+
+2. **Frontend** (servidor estático)
+
+```bash
+cd frontend
+python -m http.server 5500
+# -> http://127.0.0.1:5500
+```
+
+3. **Endpoints útiles**
+
+* `/kpis` → totales `{total_pos,total_neg,total_neu,total_comments}`
+  filtros opcionales: `?from=YYYY-MM-DD&to=YYYY-MM-DD`
+* `/series` → serie por día `{day,pos,neg,neu,total}` (soporta `from/to` si aplicaste el parche)
+* `/events` → eventos `{event_date|date, tag, description, source_url}`
+
+---
+
+## Verificación rápida
+
+* `/_debug/db` debe mostrar `db_exists: true` y tamaño > 0.
+* `/kpis` debe devolver JSON con conteos reales (p.ej. 80 179 totales).
+* En `frontend/index.html` verás **Polar Area** y **línea temporal** con filtros.
+
+---
+
+## Paradigmas aplicados
+
+* **Imperativo/Procedimental:** ingesta y API paso a paso.
+* **Estructurado:** pipeline modular (ingesta → análisis → DB → API → UI).
+* **Funcional:** clasificación y agregaciones como funciones puras.
+* **Declarativo:** SQL y configuración de Chart.js.
+* **Reactivo (UI):** filtros (fecha/sentimiento) actualizan las vistas.
+
+---
+
+## Licencia y datos
+
+* Datos almacenados en `SQLite` para fines académicos.
+* No se requiere ni se distribuye clave de API.
+

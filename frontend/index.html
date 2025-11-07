@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kanye Sentiment Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+  <style>
+    /* Estilos Generales */
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #e5e7eb;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --c-pos: #22c55e;
+      --c-neg: #ef4444;
+      --c-neu: #64748b;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+    }
+    section {
+      margin-bottom: 24px;
+    }
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid var(--border);
+    }
+    .title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    /* Header */
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.75rem;
+    }
+    .header .subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+    }
+    /* KPI Section */
+    .kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 24px;
+    }
+    .kpi .v {
+      font-size: 2.25rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .kpi .muted {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-bottom: 4px;
+    }
+    #k_nss.pos { color: var(--c-pos); }
+    #k_nss.neg { color: var(--c-neg); }
+
+    /* Layout de Gráficos */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    /* Estilos responsivos */
+    @media (max-width: 900px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <h1 class="title">Kanye Sentiment Dashboard</h1>
+    <div class="subtitle">Análisis de sentimiento de comentarios de Youtube</div>
+  </header>
+
+  <section class="card kpi">
+    <div>
+      <div class="muted">Total</div>
+      <div id="k_total" class="v">—</div>
+    </div>
+    <div>
+      <div class="muted">Pos</div>
+      <div id="k_pos" class="v">—</div>
+    </div>
+    <div>
+      <div class="muted">Neg</div>
+      <div id="k_neg" class="v">—</div>
+    </div>
+    <div>
+      <div class="muted">Neu</div>
+      <div id="k_neu" class="v">—</div>
+    </div>
+    <div>
+      <div class="muted">Net Sentiment</div>
+      <div id="k_nss" class="v">—</div>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div class="card">
+      <div class="title">SENTIMENT DISTRIBUTION</div>
+      <canvas id="polarChart"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="title">Análisis de Temáticas por Sentimiento</div>
+      <canvas id="topicsChart"></canvas>
+    </div>
+  </section>
+
+  <script>
+    // --- Configuración Global ---
+    const $ = (id) => document.getElementById(id);
+    const API_BASE = "http://127.0.0.1:5000";
+    const C_POS = '#22c55e';
+    const C_NEG = '#ef4444';
+    const C_NEU = '#64748b';
+    const C_TEXT = '#e5e7eb';
+    Chart.register(ChartDataLabels);
+    if (window.ChartAnnotation && window.ChartAnnotation.id) {
+      Chart.register(window.ChartAnnotation);
+    } else {
+      console.warn('El plugin ChartAnnotation no se pudo registrar.');
+    }
+
+    // --- Instancias de Gráficos ---
+
+    // 1. Gráfico de Distribución (Donut)
+    const polar = new Chart($('polarChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Positivo', 'Negativo', 'Neutro'],
+        datasets: [{
+          data: [0, 0, 0],
+          backgroundColor: [C_POS, C_NEG, C_NEU]
+        }]
+      },
+      options: {
+        cutout: '60%',
+        responsive: true,
+        // CAMBIO: Añadido aspectRatio: 2 para hacerlo más chato
+        aspectRatio: 2,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: C_TEXT }
+          },
+          datalabels: {
+            color: '#ffffff',
+            font: { weight: 'bold', size: 14 },
+            formatter: (value, ctx) => {
+              const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+              const percentage = (value / total * 100);
+              return percentage > 5 ? percentage.toFixed(1) + '%' : '';
+            }
+          }
+        }
+      }
+    });
+
+    // 2. Gráfico de Temáticas (NUEVO)
+    const topicsChart = new Chart($('topicsChart'), {
+      type: 'bar',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Positivo', data: [], backgroundColor: C_POS },
+          { label: 'Negativo', data: [], backgroundColor: C_NEG },
+          { label: 'Neutro', data: [], backgroundColor: C_NEU }
+        ]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        // CAMBIO: Ajustado aspectRatio: 2
+        aspectRatio: 2, 
+        scales: {
+          x: {
+            stacked: true,
+            ticks: { color: C_TEXT },
+            grid: { color: 'rgba(255,255,255,0.06)' }
+          },
+          y: {
+            stacked: true,
+            ticks: { color: C_TEXT },
+            grid: { color: 'rgba(255,255,255,0.06)' }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: C_TEXT }
+          },
+          datalabels: {
+            display: false
+          }
+        }
+      }
+    });
+
+    // --- Lógica de Carga de Datos ---
+
+    async function fetchJSON(url) {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          console.error("Error fetching data:", resp.statusText);
+          return null;
+        }
+        return await resp.json();
+      } catch (err) {
+        console.error("Fetch error:", err);
+        return null;
+      }
+    }
+
+    async function refresh() {
+      const kpis = await fetchJSON(`${API_BASE}/kpis?from=2020-10-24&to=2025-10-23`);
+      if (kpis) {
+        updateKpis(kpis);
+        updatePolarChart(kpis);
+      }
+    }
+
+    async function loadTopics() {
+      const data = await fetchJSON(`${API_BASE}/topics`);
+      if (!data) return;
+
+      const labels = Object.keys(data);
+      
+      labels.sort((a, b) => {
+        const totalA = (data[a].pos || 0) + (data[a].neg || 0) + (data[a].neu || 0);
+        const totalB = (data[b].pos || 0) + (data[b].neg || 0) + (data[b].neu || 0);
+        return totalB - totalA;
+      });
+
+      const posData = labels.map(label => data[label].pos || 0);
+      const negData = labels.map(label => data[label].neg || 0);
+      const neuData = labels.map(label => data[label].neu || 0);
+
+      topicsChart.data.labels = labels;
+      topicsChart.data.datasets[0].data = posData;
+      topicsChart.data.datasets[1].data = negData;
+      topicsChart.data.datasets[2].data = neuData;
+      
+      topicsChart.update();
+    }
+
+    // --- Funciones de Actualización de UI ---
+
+    function updateKpis(kpis) {
+      const total = kpis.total_comments || 0;
+      $('k_total').textContent = total.toLocaleString('es-ES');
+      $('k_pos').textContent = (kpis.total_pos || 0).toLocaleString('es-ES');
+      $('k_neg').textContent = (kpis.total_neg || 0).toLocaleString('es-ES');
+      $('k_neu').textContent = (kpis.total_neu || 0).toLocaleString('es-ES');
+
+      const nss = total > 0 ? ((kpis.total_pos || 0) - (kpis.total_neg || 0)) / total : 0;
+      const nssPercent = (nss * 100).toFixed(1);
+      $('k_nss').textContent = (nss > 0 ? '+' : '') + nssPercent + '%';
+      $('k_nss').className = nss > 0 ? 'v pos' : 'v neg';
+    }
+
+    function updatePolarChart(kpis) {
+      polar.data.datasets[0].data[0] = kpis.total_pos || 0;
+      polar.data.datasets[0].data[1] = kpis.total_neg || 0;
+      polar.data.datasets[0].data[2] = kpis.total_neu || 0;
+      polar.update();
+    }
+
+    // --- Lógica de Inicio ---
+    (async () => {
+      await refresh();
+      await loadTopics();
+    })();
+  </script>
+</body>
+</html>
