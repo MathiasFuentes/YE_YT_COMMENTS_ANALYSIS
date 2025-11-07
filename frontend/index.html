@@ -1,775 +1,303 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kanye Sentiment Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Chart.js and plugins -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
-
-  <!-- flatpickr for date picker -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 
   <style>
+    /* Estilos Generales */
     :root {
-      --bg: #0f1419;
-      --card: #1a1f26;
-      --border: #2f3336;
-      --text: #e7e9ea;
-      --muted: #71767b;
-      --pos: #65d18e;
-      --neg: #ef4444;
-      --neu: #60a5fa;
-      --accent: #1d9bf0;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #e5e7eb;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --c-pos: #22c55e;
+      --c-neg: #ef4444;
+      --c-neu: #64748b;
     }
-
-    * { 
-      margin: 0; 
-      padding: 0; 
-      box-sizing: border-box; 
-    }
-
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: var(--bg);
       color: var(--text);
-      line-height: 1.5;
-      padding: 20px;
+      margin: 0;
+      padding: 24px;
     }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
+    section {
+      margin-bottom: 24px;
     }
-
-    h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-    }
-
-    .subtitle {
-      color: var(--muted);
-      margin-bottom: 1.5rem;
-      font-size: 0.95rem;
-    }
-
-    /* KPI Bar */
-    .kpi {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      flex-wrap: wrap;
-      padding: 1.25rem;
-      margin-bottom: 1.5rem;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-    }
-
-    .kpi > div {
-      flex: 1;
-      min-width: 110px;
-      text-align: center;
-    }
-
-    .kpi .muted {
-      color: var(--muted);
-      font-size: 0.8rem;
-      margin-bottom: 0.25rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .kpi .v {
-      font-size: 1.75rem;
-      font-weight: 700;
-    }
-
-    /* Dynamic color for Net Sentiment Score */
-    #k_nss.positive {
-      color: #22c55e;
-    }
-
-    #k_nss.negative {
-      color: #ef4444;
-    }
-
-    #k_nss.neutral {
-      color: var(--text);
-    }
-
-    /* Card styling */
     .card {
-      background: var(--card);
-      border: 1px solid var(--border);
+      background-color: var(--card-bg);
       border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
+      padding: 24px;
+      border: 1px solid var(--border);
     }
-
-    .card .title {
-      font-size: 0.875rem;
+    .title {
+      font-size: 1.25rem;
       font-weight: 600;
-      margin-bottom: 1rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
+      margin-bottom: 16px;
     }
-
-    /* Chart controls - consolidated */
-    .chart-controls {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-bottom: 1.25rem;
-      padding-bottom: 1rem;
+    /* Header */
+    .header {
       border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
     }
-
-    .chart-controls label {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      color: var(--text);
-      font-size: 0.875rem;
-      cursor: pointer;
+    .header h1 {
+      margin: 0;
+      font-size: 1.75rem;
+    }
+    .header .subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+    }
+    /* KPI Section */
+    .kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 24px;
+    }
+    .kpi .v {
+      font-size: 2.25rem;
+      font-weight: 700;
       white-space: nowrap;
     }
-
-    .chart-controls label .muted {
-      color: var(--muted);
-      margin-right: 0.25rem;
-    }
-
-    .chart-controls input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-      accent-color: var(--accent);
-    }
-
-    .chart-controls input[type="text"] {
-      background: var(--bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.375rem 0.75rem;
+    .kpi .muted {
+      color: var(--text-muted);
       font-size: 0.875rem;
-      cursor: pointer;
-      min-width: 120px;
+      margin-bottom: 4px;
     }
+    #k_nss.pos { color: var(--c-pos); }
+    #k_nss.neg { color: var(--c-neg); }
 
-    .chart-controls select {
-      background: var(--bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.375rem 0.75rem;
-      font-size: 0.875rem;
-      cursor: pointer;
+    /* Layout de Gráficos */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
     }
-
-    .chart-controls button {
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      padding: 0.375rem 0.875rem;
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-
-    .chart-controls button:hover {
-      opacity: 0.8;
-    }
-
-    .date-group {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .chart-container {
-      position: relative;
-      height: 400px;
-    }
-
-    @media (max-width: 768px) {
-      .kpi {
-        flex-direction: column;
-      }
-
-      .chart-container {
-        height: 300px;
-      }
-
-      .chart-controls {
-        gap: 0.75rem;
+    /* Estilos responsivos */
+    @media (max-width: 900px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Kanye Sentiment Dashboard</h1>
-    <div class="subtitle">Análisis de sentimiento en tiempo real de tweets sobre Kanye West</div>
 
-    <!-- KPI Bar -->
-    <section class="card kpi">
-      <div>
-        <div class="muted">Total</div>
-        <div id="k_total" class="v">—</div>
-      </div>
-      <div>
-        <div class="muted">Pos</div>
-        <div id="k_pos" class="v">—</div>
-      </div>
-      <div>
-        <div class="muted">Neg</div>
-        <div id="k_neg" class="v">—</div>
-      </div>
-      <div>
-        <div class="muted">Neu</div>
-        <div id="k_neu" class="v">—</div>
-      </div>
-      <div>
-        <div class="muted">Net Sentiment</div>
-        <div id="k_nss" class="v">—</div>
-      </div>
-    </section>
+  <header class="header">
+    <h1 class="title">Kanye Sentiment Dashboard</h1>
+    <div class="subtitle">Análisis de sentimiento de comentarios de Youtube</div>
+  </header>
 
-    <!-- Chart 1: Donut Chart -->
-    <section class="card">
+  <section class="card kpi">
+    <div>
+      <div class="muted">Total</div>
+      <div id="k_total" class="v">—</div>
+    </div>
+    <div>
+      <div class="muted">Pos</div>
+      <div id="k_pos" class="v">—</div>
+    </div>
+    <div>
+      <div class="muted">Neg</div>
+      <div id="k_neg" class="v">—</div>
+    </div>
+    <div>
+      <div class="muted">Neu</div>
+      <div id="k_neu" class="v">—</div>
+    </div>
+    <div>
+      <div class="muted">Net Sentiment</div>
+      <div id="k_nss" class="v">—</div>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div class="card">
       <div class="title">SENTIMENT DISTRIBUTION</div>
-      <div class="chart-container">
-        <canvas id="polarChart"></canvas>
-      </div>
-    </section>
+      <canvas id="polarChart"></canvas>
+    </div>
 
-    <!-- Chart 2: Time Series -->
-    <section class="card">
-      <div class="title">SENTIMENT OVER TIME</div>
-
-      <!-- Consolidated Controls -->
-      <div class="chart-controls">
-        <!-- Date Pickers -->
-        <div class="date-group">
-          <label><span class="muted">From:</span>
-            <input type="text" id="fromDate" placeholder="Select date" />
-          </label>
-        </div>
-        <div class="date-group">
-          <label><span class="muted">To:</span>
-            <input type="text" id="toDate" placeholder="Select date" />
-          </label>
-        </div>
-
-        <!-- Sentiment Checkboxes -->
-        <label><input type="checkbox" id="chkPos" checked /> Positivo</label>
-        <label><input type="checkbox" id="chkNeg" checked /> Negativo</label>
-        <label><input type="checkbox" id="chkNeu" checked /> Neutral</label>
-
-        <!-- Rolling Average -->
-        <label>
-          <span class="muted">Rolling Avg:</span>
-          <select id="rollingAverage">
-            <option value="0">None</option>
-            <option value="7">7-Day</option>
-            <option value="30">30-Day</option>
-          </select>
-        </label>
-
-        <!-- 100% Stacked -->
-        <label><input type="checkbox" id="showStacked"> 100% Stacked</label>
-
-        <!-- Show Events -->
-        <label><input type="checkbox" id="showEvents" checked> Show Events</label>
-
-        <!-- Show Points -->
-        <label><input type="checkbox" id="showPoints"> Show Points</label>
-
-        <!-- Reset Button -->
-        <button id="btnReset">Reset</button>
-      </div>
-
-      <div class="chart-container">
-        <canvas id="lineChart"></canvas>
-      </div>
-    </section>
-  </div>
+    <div class="card">
+      <div class="title">Análisis de Temáticas por Sentimiento</div>
+      <canvas id="topicsChart"></canvas>
+    </div>
+  </section>
 
   <script>
+    // --- Configuración Global ---
     const $ = (id) => document.getElementById(id);
-    const API = 'http://127.0.0.1:5000';
-
-    // Register Chart.js plugins - FIX FOR ERROR 1
+    const API_BASE = "http://127.0.0.1:5000";
+    const C_POS = '#22c55e';
+    const C_NEG = '#ef4444';
+    const C_NEU = '#64748b';
+    const C_TEXT = '#e5e7eb';
     Chart.register(ChartDataLabels);
     if (window.ChartAnnotation && window.ChartAnnotation.id) {
       Chart.register(window.ChartAnnotation);
     } else {
-      console.warn('ChartAnnotation plugin could not be registered.');
+      console.warn('El plugin ChartAnnotation no se pudo registrar.');
     }
 
-    // Helper function to calculate rolling average
-    function calculateRollingAverage(data, windowSize) {
-      if (windowSize <= 0 || !data || data.length === 0) return data;
+    // --- Instancias de Gráficos ---
 
-      const result = [];
-      for (let i = 0; i < data.length; i++) {
-        const start = Math.max(0, i - windowSize + 1);
-        const window = data.slice(start, i + 1);
-        const sum = window.reduce((acc, point) => acc + point.y, 0);
-        const avg = sum / window.length;
-        result.push({ x: data[i].x, y: avg });
-      }
-      return result;
-    }
-
-    // Donut Chart
-    const polarChart = new Chart($('polarChart'), {
+    // 1. Gráfico de Distribución (Donut)
+    const polar = new Chart($('polarChart'), {
       type: 'doughnut',
       data: {
-        labels: ['Positivo', 'Negativo', 'Neutral'],
+        labels: ['Positivo', 'Negativo', 'Neutro'],
         datasets: [{
           data: [0, 0, 0],
-          backgroundColor: ['#65d18e', '#ef4444', '#60a5fa'],
-          borderColor: '#1a1f26',
-          borderWidth: 2
+          backgroundColor: [C_POS, C_NEG, C_NEU]
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
         cutout: '60%',
+        responsive: true,
+        // CAMBIO: Añadido aspectRatio: 2 para hacerlo más chato
+        aspectRatio: 2,
         plugins: {
           legend: {
             position: 'bottom',
-            labels: {
-              color: '#e7e9ea',
-              padding: 15,
-              font: { size: 13 }
-            }
-          },
-          tooltip: {
-            backgroundColor: '#1a1f26',
-            titleColor: '#e7e9ea',
-            bodyColor: '#e7e9ea',
-            borderColor: '#2f3336',
-            borderWidth: 1,
-            padding: 12,
-            displayColors: true,
-            callbacks: {
-              label: function(context) {
-                const label = context.label || '';
-                const value = context.parsed || 0;
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                return `${label}: ${value} (${percentage}%)`;
-              }
-            }
+            labels: { color: C_TEXT }
           },
           datalabels: {
-            color: '#fff',
-            font: { size: 14, weight: 'bold' },
-            formatter: (value, context) => {
-              const total = context.dataset.data.reduce((a, b) => a + b, 0);
-              if (total === 0) return '';
-              const percentage = (value / total) * 100;
-              // Only display if above 5% threshold
+            color: '#ffffff',
+            font: { weight: 'bold', size: 14 },
+            formatter: (value, ctx) => {
+              const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+              const percentage = (value / total * 100);
               return percentage > 5 ? percentage.toFixed(1) + '%' : '';
             }
           }
-        },
-        onClick: (event, elements) => {
-          if (elements.length > 0) {
-            const index = elements[0].index;
-            const chkPos = $('chkPos');
-            const chkNeg = $('chkNeg');
-            const chkNeu = $('chkNeu');
-
-            // Check if clicking the same category that's already exclusively selected
-            const isExclusivelySelected = (
-              (index === 0 && chkPos.checked && !chkNeg.checked && !chkNeu.checked) ||
-              (index === 1 && chkNeg.checked && !chkPos.checked && !chkNeu.checked) ||
-              (index === 2 && chkNeu.checked && !chkPos.checked && !chkNeg.checked)
-            );
-
-            if (isExclusivelySelected) {
-              // Reset to all checked
-              chkPos.checked = true;
-              chkNeg.checked = true;
-              chkNeu.checked = true;
-            } else {
-              // Filter to only the clicked category
-              chkPos.checked = (index === 0);
-              chkNeg.checked = (index === 1);
-              chkNeu.checked = (index === 2);
-            }
-
-            // Update the line chart
-            refresh();
-          }
         }
       }
     });
 
-    // Line Chart
-    const lineChart = new Chart($('lineChart'), {
-      type: 'line',
+    // 2. Gráfico de Temáticas (NUEVO)
+    const topicsChart = new Chart($('topicsChart'), {
+      type: 'bar',
       data: {
+        labels: [],
         datasets: [
-          {
-            label: 'Positivo',
-            data: [],
-            borderColor: '#65d18e',
-            backgroundColor: 'rgba(101, 209, 142, 0.2)',
-            tension: 0.4,
-            fill: false,
-            pointRadius: 0,
-            pointHoverRadius: 5
-          },
-          {
-            label: 'Negativo',
-            data: [],
-            borderColor: '#ef4444',
-            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-            tension: 0.4,
-            fill: false,
-            pointRadius: 0,
-            pointHoverRadius: 5
-          },
-          {
-            label: 'Neutral',
-            data: [],
-            borderColor: '#60a5fa',
-            backgroundColor: 'rgba(96, 165, 250, 0.2)',
-            tension: 0.4,
-            fill: false,
-            pointRadius: 0,
-            pointHoverRadius: 5
-          }
+          { label: 'Positivo', data: [], backgroundColor: C_POS },
+          { label: 'Negativo', data: [], backgroundColor: C_NEG },
+          { label: 'Neutro', data: [], backgroundColor: C_NEU }
         ]
       },
       options: {
+        indexAxis: 'y',
         responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: {
-            position: 'top',
-            labels: {
-              color: '#e7e9ea',
-              padding: 15,
-              font: { size: 13 },
-              usePointStyle: true
-            }
-          },
-          tooltip: {
-            backgroundColor: '#1a1f26',
-            titleColor: '#e7e9ea',
-            bodyColor: '#e7e9ea',
-            borderColor: '#2f3336',
-            borderWidth: 1,
-            padding: 12
-          },
-          datalabels: { display: false },
-          annotation: { annotations: {} }
-        },
+        // CAMBIO: Ajustado aspectRatio: 2
+        aspectRatio: 2, 
         scales: {
           x: {
-            type: 'time',
-            time: {
-              unit: 'day',
-              displayFormats: { day: 'MMM d' }
-            },
-            grid: { color: '#2f3336', drawBorder: false },
-            ticks: { color: '#71767b' }
+            stacked: true,
+            ticks: { color: C_TEXT },
+            grid: { color: 'rgba(255,255,255,0.06)' }
           },
           y: {
-            beginAtZero: true,
-            grid: { color: '#2f3336', drawBorder: false },
-            ticks: { color: '#71767b' },
-            stacked: false
+            stacked: true,
+            ticks: { color: C_TEXT },
+            grid: { color: 'rgba(255,255,255,0.06)' }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: C_TEXT }
+          },
+          datalabels: {
+            display: false
           }
         }
       }
     });
 
-    let seriesAll = [];
-    let allEvents = [];
-    let fromDatePicker, toDatePicker;
+    // --- Lógica de Carga de Datos ---
 
-    // Main initialization function
-    async function init() {
-      // FIX FOR ERROR 2: Set default date values BEFORE initializing flatpickr
-      const minDate = '2020-10-24';
-      const maxDate = '2025-10-23';
-
-      const fromDateInput = $('fromDate');
-      const toDateInput = $('toDate');
-
-      // Set default values to prevent "Invalid time value" error
-      fromDateInput.value = minDate;
-      toDateInput.value = maxDate;
-
-      // Initialize flatpickr
-      fromDatePicker = flatpickr(fromDateInput, {
-        minDate: minDate,
-        maxDate: maxDate,
-        defaultDate: minDate,
-        dateFormat: "Y-m-d",
-        onChange: function(selectedDates, dateStr, instance) {
-          if (toDatePicker) {
-            toDatePicker.set('minDate', dateStr);
-          }
-          refresh();
-        }
-      });
-
-      toDatePicker = flatpickr(toDateInput, {
-        minDate: minDate,
-        maxDate: maxDate,
-        defaultDate: maxDate,
-        dateFormat: "Y-m-d",
-        onChange: function(selectedDates, dateStr, instance) {
-          refresh();
-        }
-      });
-
-      // Add event listeners
-      $('chkPos').addEventListener('change', refresh);
-      $('chkNeg').addEventListener('change', refresh);
-      $('chkNeu').addEventListener('change', refresh);
-      $('rollingAverage').addEventListener('change', refresh);
-      $('showStacked').addEventListener('change', refresh);
-      $('showEvents').addEventListener('change', refresh);
-      $('showPoints').addEventListener('change', refresh);
-
-      $('btnReset').addEventListener('click', () => {
-        $('chkPos').checked = true;
-        $('chkNeg').checked = true;
-        $('chkNeu').checked = true;
-        $('rollingAverage').value = '0';
-        $('showStacked').checked = false;
-        $('showEvents').checked = true;
-        $('showPoints').checked = false;
-
-        // Reset date range
-        fromDatePicker.setDate(minDate);
-        toDatePicker.setDate(maxDate);
-
-        refresh();
-      });
-
-      // Fetch initial data
-      await fetchData();
-    }
-
-    async function fetchData() {
+    async function fetchJSON(url) {
       try {
-        const [kpiRes, seriesRes, eventsRes] = await Promise.all([
-          fetch(`${API}/kpis`),
-          fetch(`${API}/series`),
-          fetch(`${API}/events`)
-        ]);
-
-        if (!kpiRes.ok || !seriesRes.ok || !eventsRes.ok) {
-          throw new Error('API request failed');
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          console.error("Error fetching data:", resp.statusText);
+          return null;
         }
-
-        const kpis = await kpiRes.json();
-        seriesAll = await seriesRes.json();
-        allEvents = await eventsRes.json();
-
-        console.log('Data loaded:', { kpis, seriesCount: seriesAll.length, eventsCount: allEvents.length });
-
-        // CRITICAL FIX: Transform API data structure
-        // API returns: { day: "YYYY-MM-DD", pos: N, neg: N, neu: N, total: N }
-        // We need: { x: "YYYY-MM-DD", y: { pos: N, neg: N, neu: N } }
-        seriesAll = seriesAll.map(d => ({
-          x: d.day,
-          y: {
-            pos: d.pos || 0,
-            neg: d.neg || 0,
-            neu: d.neu || 0
-          }
-        }));
-
-        updateKpis(kpis);
-        refresh();
+        return await resp.json();
       } catch (err) {
-        console.error('Error fetching data:', err);
+        console.error("Fetch error:", err);
+        return null;
       }
     }
+
+    async function refresh() {
+      const kpis = await fetchJSON(`${API_BASE}/kpis?from=2020-10-24&to=2025-10-23`);
+      if (kpis) {
+        updateKpis(kpis);
+        updatePolarChart(kpis);
+      }
+    }
+
+    async function loadTopics() {
+      const data = await fetchJSON(`${API_BASE}/topics`);
+      if (!data) return;
+
+      const labels = Object.keys(data);
+      
+      labels.sort((a, b) => {
+        const totalA = (data[a].pos || 0) + (data[a].neg || 0) + (data[a].neu || 0);
+        const totalB = (data[b].pos || 0) + (data[b].neg || 0) + (data[b].neu || 0);
+        return totalB - totalA;
+      });
+
+      const posData = labels.map(label => data[label].pos || 0);
+      const negData = labels.map(label => data[label].neg || 0);
+      const neuData = labels.map(label => data[label].neu || 0);
+
+      topicsChart.data.labels = labels;
+      topicsChart.data.datasets[0].data = posData;
+      topicsChart.data.datasets[1].data = negData;
+      topicsChart.data.datasets[2].data = neuData;
+      
+      topicsChart.update();
+    }
+
+    // --- Funciones de Actualización de UI ---
 
     function updateKpis(kpis) {
-      const total = kpis.total_pos + kpis.total_neg + kpis.total_neu;
-      $('k_total').textContent = total.toLocaleString();
-      $('k_pos').textContent = kpis.total_pos.toLocaleString();
-      $('k_neg').textContent = kpis.total_neg.toLocaleString();
-      $('k_neu').textContent = kpis.total_neu.toLocaleString();
+      const total = kpis.total_comments || 0;
+      $('k_total').textContent = total.toLocaleString('es-ES');
+      $('k_pos').textContent = (kpis.total_pos || 0).toLocaleString('es-ES');
+      $('k_neg').textContent = (kpis.total_neg || 0).toLocaleString('es-ES');
+      $('k_neu').textContent = (kpis.total_neu || 0).toLocaleString('es-ES');
 
-      // Calculate Net Sentiment Score
-      const nss = total > 0 ? (kpis.total_pos - kpis.total_neg) / total : 0;
+      const nss = total > 0 ? ((kpis.total_pos || 0) - (kpis.total_neg || 0)) / total : 0;
       const nssPercent = (nss * 100).toFixed(1);
-      const nssElement = $('k_nss');
-
-      nssElement.textContent = (nss > 0 ? '+' : '') + nssPercent + '%';
-
-      // Apply dynamic color class
-      nssElement.classList.remove('positive', 'negative', 'neutral');
-      if (nss > 0) {
-        nssElement.classList.add('positive');
-      } else if (nss < 0) {
-        nssElement.classList.add('negative');
-      } else {
-        nssElement.classList.add('neutral');
-      }
-
-      // Update donut chart
-      polarChart.data.datasets[0].data = [kpis.total_pos, kpis.total_neg, kpis.total_neu];
-      polarChart.update();
+      $('k_nss').textContent = (nss > 0 ? '+' : '') + nssPercent + '%';
+      $('k_nss').className = nss > 0 ? 'v pos' : 'v neg';
     }
 
-    function filterSeries() {
-      const showPos = $('chkPos').checked;
-      const showNeg = $('chkNeg').checked;
-      const showNeu = $('chkNeu').checked;
-
-      // Get date values - they are guaranteed to be set now
-      const fromDate = $('fromDate').value ? new Date($('fromDate').value) : null;
-      const toDate = $('toDate').value ? new Date($('toDate').value) : null;
-
-      return seriesAll.filter(d => {
-        const date = new Date(d.x);
-        const inDateRange = (!fromDate || date >= fromDate) && (!toDate || date <= toDate);
-        const hasSentiment = (showPos && d.y.pos > 0) || (showNeg && d.y.neg > 0) || (showNeu && d.y.neu > 0);
-        return inDateRange && hasSentiment;
-      });
+    function updatePolarChart(kpis) {
+      polar.data.datasets[0].data[0] = kpis.total_pos || 0;
+      polar.data.datasets[0].data[1] = kpis.total_neg || 0;
+      polar.data.datasets[0].data[2] = kpis.total_neu || 0;
+      polar.update();
     }
 
-    function refresh() {
-      if (seriesAll.length === 0) return;
-
-      const seriesData = filterSeries();
-      updateCharts(seriesData, allEvents);
-    }
-
-    function updateCharts(seriesData, events) {
-      const isStacked = $('showStacked').checked;
-      const windowSize = parseInt($('rollingAverage').value) || 0;
-      const showEventsFlag = $('showEvents').checked;
-      const showPointsFlag = $('showPoints').checked;
-
-      // Prepare base data
-      let posData, negData, neuData;
-
-      if (isStacked) {
-        // Transform to percentages
-        posData = seriesData.map(d => {
-          const dailyTotal = (d.y.pos || 0) + (d.y.neg || 0) + (d.y.neu || 0);
-          return {
-            x: d.x,
-            y: dailyTotal > 0 ? ((d.y.pos || 0) / dailyTotal) * 100 : 0
-          };
-        });
-        negData = seriesData.map(d => {
-          const dailyTotal = (d.y.pos || 0) + (d.y.neg || 0) + (d.y.neu || 0);
-          return {
-            x: d.x,
-            y: dailyTotal > 0 ? ((d.y.neg || 0) / dailyTotal) * 100 : 0
-          };
-        });
-        neuData = seriesData.map(d => {
-          const dailyTotal = (d.y.pos || 0) + (d.y.neg || 0) + (d.y.neu || 0);
-          return {
-            x: d.x,
-            y: dailyTotal > 0 ? ((d.y.neu || 0) / dailyTotal) * 100 : 0
-          };
-        });
-      } else {
-        // Use absolute values
-        posData = seriesData.map(d => ({ x: d.x, y: d.y.pos || 0 }));
-        negData = seriesData.map(d => ({ x: d.x, y: d.y.neg || 0 }));
-        neuData = seriesData.map(d => ({ x: d.x, y: d.y.neu || 0 }));
-      }
-
-      // Apply rolling average if needed
-      if (windowSize > 0) {
-        posData = calculateRollingAverage(posData, windowSize);
-        negData = calculateRollingAverage(negData, windowSize);
-        neuData = calculateRollingAverage(neuData, windowSize);
-      }
-
-      // Update datasets
-      lineChart.data.datasets[0].data = posData;
-      lineChart.data.datasets[1].data = negData;
-      lineChart.data.datasets[2].data = neuData;
-
-      // Update chart options dynamically
-      lineChart.options.scales.y.stacked = isStacked;
-      lineChart.options.scales.y.max = isStacked ? 100 : undefined;
-      lineChart.options.scales.y.ticks.callback = isStacked ? (value) => value + '%' : (value) => value;
-
-      // Set fill for area chart effect
-      lineChart.data.datasets.forEach(dataset => {
-        dataset.fill = isStacked ? 'origin' : false;
-      });
-
-      // Update point visibility
-      const pointRadius = showPointsFlag ? 3 : 0;
-      lineChart.data.datasets.forEach(dataset => {
-        dataset.pointRadius = pointRadius;
-      });
-
-      // Update visibility based on checkboxes
-      lineChart.data.datasets[0].hidden = !$('chkPos').checked;
-      lineChart.data.datasets[1].hidden = !$('chkNeg').checked;
-      lineChart.data.datasets[2].hidden = !$('chkNeu').checked;
-
-      // Update annotations for events
-      const annotations = {};
-      if (showEventsFlag && events) {
-        events.forEach((evt, i) => {
-          annotations[`event${i}`] = {
-            type: 'line',
-            xMin: evt.date,
-            xMax: evt.date,
-            borderColor: '#1d9bf0',
-            borderWidth: 2,
-            borderDash: [5, 5],
-            label: {
-              content: evt.label,
-              enabled: true,
-              position: 'top',
-              backgroundColor: '#1d9bf0',
-              color: '#fff',
-              font: { size: 10 }
-            }
-          };
-        });
-      }
-      lineChart.options.plugins.annotation.annotations = annotations;
-
-      lineChart.update();
-    }
-
-    // Start the application
-    init();
-
-    // Refresh data every 30 seconds
-    setInterval(fetchData, 30000);
+    // --- Lógica de Inicio ---
+    (async () => {
+      await refresh();
+      await loadTopics();
+    })();
   </script>
 </body>
 </html>
