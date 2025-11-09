@@ -43,6 +43,9 @@
       font-size: 1.25rem;
       font-weight: 600;
       margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     /* Header */
     .header {
@@ -83,6 +86,53 @@
       grid-template-columns: 1fr 1fr;
       gap: 24px;
     }
+    
+    /* --- NUEVO ESTILO PARA LA DESCRIPCIÓN DEL GRÁFICO --- */
+    .chart-caption {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 12px;
+    }
+    .chart-caption code {
+      background-color: var(--bg);
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+    }
+    /* --- FIN DE ESTILO NUEVO --- */
+
+    /* --- SECCIÓN: COMPARADOR DE EVENTOS --- */
+    .pie-container {
+      max-height: 300px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    #eventCheckboxesContainer {
+      display: flex;
+      flex-direction: column;
+      max-height: 300px; /* Misma altura que el gráfico */
+      overflow-y: auto;
+      padding: 5px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    #eventCheckboxesContainer label {
+      display: block;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    #eventCheckboxesContainer label:hover {
+      background-color: var(--bg);
+    }
+    #eventCheckboxesContainer input {
+      margin-right: 8px;
+    }
+    
     /* Estilos responsivos */
     @media (max-width: 900px) {
       .grid-2 {
@@ -93,45 +143,74 @@
 </head>
 <body>
 
+  <!-- 1. Header -->
   <header class="header">
-    <h1 class="title">Kanye Sentiment Dashboard</h1>
-    <div class="subtitle">Análisis de sentimiento de comentarios de Youtube</div>
+    <h1 class="title">Análisis de Sentimiento de Comentarios sobre Kanye West</h1>
+    <div class="subtitle">Dashboard interactivo con comentarios de Youtube.</div>
   </header>
 
+  <!-- 2. KPIs (Muestran el rango completo) -->
   <section class="card kpi">
     <div>
       <div class="muted">Total</div>
       <div id="k_total" class="v">—</div>
     </div>
     <div>
-      <div class="muted">Pos</div>
+      <div class="muted">Positivos</div>
       <div id="k_pos" class="v">—</div>
     </div>
     <div>
-      <div class="muted">Neg</div>
+      <div class="muted">Negativos</div>
       <div id="k_neg" class="v">—</div>
     </div>
     <div>
-      <div class="muted">Neu</div>
+      <div class="muted">Neutrales</div>
       <div id="k_neu" class="v">—</div>
     </div>
     <div>
-      <div class="muted">Net Sentiment</div>
+      <div class="muted">Sentimiento Neto</div>
       <div id="k_nss" class="v">—</div>
     </div>
   </section>
 
+  <!-- 3. Gráficos Principales (Muestran el rango completo) -->
   <section class="grid-2">
     <div class="card">
-      <div class="title">SENTIMENT DISTRIBUTION</div>
+      <div class="title">Distribución de Sentimiento</div>
       <canvas id="polarChart"></canvas>
+      <!-- NUEVO TEXTO DE DESCRIPCIÓN -->
+      <div class="chart-caption">
+        Datos de +80,000 comentarios. Sentimiento clasificado con un modelo roBERTa.
+      </div>
     </div>
-
     <div class="card">
-      <div class="title">Análisis de Temáticas por Sentimiento</div>
+      <div class="title">Análisis de Temáticas</div>
       <canvas id="topicsChart"></canvas>
+      <!-- NUEVO TEXTO DE DESCRIPCIÓN -->
+      <div class="chart-caption">
+        Temáticas extraídas con un modelo Zero-Shot
+      </div>
     </div>
   </section>
+
+  <!-- 4. NUEVA SECCIÓN: Comparativa de Eventos -->
+  <section class="card">
+    <div class="title">Comparativa de Eventos Seleccionados</div>
+    <div class="grid-2">
+      <!-- Columna 1: Checkboxes -->
+      <div>
+        <div class="muted" style="margin-bottom: 8px;">Selecciona eventos para sumar sus datos (periodo de 30 días):</div>
+        <div id="eventCheckboxesContainer">
+          <!-- Las checkboxes se cargarán aquí por JS -->
+        </div>
+      </div>
+      <!-- Columna 2: Gráfico Pie -->
+      <div class="pie-container">
+        <canvas id="eventComparatorPieChart"></canvas>
+      </div>
+    </div>
+  </section>
+
 
   <script>
     // --- Configuración Global ---
@@ -141,6 +220,29 @@
     const C_NEG = '#ef4444';
     const C_NEU = '#64748b';
     const C_TEXT = '#e5e7eb';
+    const C_MUTED_BG = '#334155'; // Color para el gráfico vacío
+    const MAX_DATE_STR = '2025-10-23';
+    const MIN_DATE_STR = '2020-10-24';
+    
+    // Lista de eventos
+    const allEventsData = [
+      { "event_date": "2020-10-24", "tag": "Joe Rogan Podcast #1554" },
+      { "event_date": "2020-11-03", "tag": "Elecciones EE.UU. 2020" },
+      { "event_date": "2020-11-04", "tag": "Kanye 2024" },
+      { "event_date": "2021-08-05", "tag": "Evento Donda" },
+      { "event_date": "2021-08-29", "tag": "Lanzamiento Donda" },
+      { "event_date": "2022-02-22", "tag": "Lanzamiento Donda 2" },
+      { "event_date": "2022-10-03", "tag": "Polémica White Lives Matter" },
+      { "event_date": "2022-10-09", "tag": "Comentarios antisemitas" },
+      { "event_date": "2022-12-01", "tag": "Cena con Trump" },
+      { "event_date": "2023-01-01", "tag": "Desaparición mediática" },
+      { "event_date": "2023-12-15", "tag": "Anuncio álbum Vultures" },
+      { "event_date": "2024-02-09", "tag": "Lanzamiento álbum Vultures" },
+      { "event_date": "2024-03-07", "tag": "Cancelación de conciertos" },
+      { "event_date": "2025-03-20", "tag": "Declaraciones políticas" },
+      { "event_date": "2025-08-12", "tag": "Candidatura 2028" }
+    ];
+
     Chart.register(ChartDataLabels);
     if (window.ChartAnnotation && window.ChartAnnotation.id) {
       Chart.register(window.ChartAnnotation);
@@ -155,21 +257,14 @@
       type: 'doughnut',
       data: {
         labels: ['Positivo', 'Negativo', 'Neutro'],
-        datasets: [{
-          data: [0, 0, 0],
-          backgroundColor: [C_POS, C_NEG, C_NEU]
-        }]
+        datasets: [{ data: [0, 0, 0], backgroundColor: [C_POS, C_NEG, C_NEU] }]
       },
       options: {
         cutout: '60%',
         responsive: true,
-        // CAMBIO: Añadido aspectRatio: 2 para hacerlo más chato
         aspectRatio: 2,
         plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { color: C_TEXT }
-          },
+          legend: { position: 'bottom', labels: { color: C_TEXT } },
           datalabels: {
             color: '#ffffff',
             font: { weight: 'bold', size: 14 },
@@ -183,7 +278,7 @@
       }
     });
 
-    // 2. Gráfico de Temáticas (NUEVO)
+    // 2. Gráfico de Temáticas
     const topicsChart = new Chart($('topicsChart'), {
       type: 'bar',
       data: {
@@ -197,27 +292,45 @@
       options: {
         indexAxis: 'y',
         responsive: true,
-        // CAMBIO: Ajustado aspectRatio: 2
         aspectRatio: 2, 
         scales: {
-          x: {
-            stacked: true,
-            ticks: { color: C_TEXT },
-            grid: { color: 'rgba(255,255,255,0.06)' }
-          },
-          y: {
-            stacked: true,
-            ticks: { color: C_TEXT },
-            grid: { color: 'rgba(255,255,255,0.06)' }
-          }
+          x: { stacked: true, ticks: { color: C_TEXT }, grid: { color: 'rgba(255,255,255,0.06)' } },
+          y: { stacked: true, ticks: { color: C_TEXT }, grid: { color: 'rgba(255,255,255,0.06)' } }
         },
+        plugins: {
+          legend: { position: 'bottom', labels: { color: C_TEXT } },
+          datalabels: { display: false }
+        }
+      }
+    });
+    
+    // 3. NUEVO GRÁFICO: Pie Chart Comparador de Eventos
+    const eventComparatorPieChart = new Chart($('eventComparatorPieChart'), {
+      type: 'pie',
+      data: {
+        labels: ['Sin selección'],
+        datasets: [{
+          data: [1],
+          backgroundColor: [C_MUTED_BG]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
         plugins: {
           legend: {
             position: 'bottom',
             labels: { color: C_TEXT }
           },
           datalabels: {
-            display: false
+            color: '#ffffff',
+            font: { weight: 'bold' },
+            formatter: (value, ctx) => {
+              if (ctx.chart.data.labels[0] === 'Sin selección') return '';
+              const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+              const percentage = (value / total * 100);
+              return percentage > 5 ? percentage.toFixed(1) + '%' : '';
+            }
           }
         }
       }
@@ -239,19 +352,30 @@
       }
     }
 
+    // Carga los KPIs y el Donut (SIEMPRE en rango completo)
     async function refresh() {
-      const kpis = await fetchJSON(`${API_BASE}/kpis?from=2020-10-24&to=2025-10-23`);
+      const kpis = await fetchJSON(`${API_BASE}/kpis?from=${MIN_DATE_STR}&to=${MAX_DATE_STR}`);
       if (kpis) {
         updateKpis(kpis);
         updatePolarChart(kpis);
       }
+      return kpis;
     }
 
+    // Carga el gráfico de Temáticas (SIEMPRE en rango completo)
     async function loadTopics() {
-      const data = await fetchJSON(`${API_BASE}/topics`);
+      // Usamos el endpoint de temáticas con el rango completo
+      const data = await fetchJSON(`${API_BASE}/topics?from=${MIN_DATE_STR}&to=${MAX_DATE_STR}`);
       if (!data) return;
 
       const labels = Object.keys(data);
+      
+      if (labels.length === 0) {
+        topicsChart.data.labels = ["Sin datos"];
+        topicsChart.data.datasets[0].data = [0,0,0];
+        topicsChart.update();
+        return;
+      }
       
       labels.sort((a, b) => {
         const totalA = (data[a].pos || 0) + (data[a].neg || 0) + (data[a].neu || 0);
@@ -267,11 +391,91 @@
       topicsChart.data.datasets[0].data = posData;
       topicsChart.data.datasets[1].data = negData;
       topicsChart.data.datasets[2].data = neuData;
-      
       topicsChart.update();
     }
 
-    // --- Funciones de Actualización de UI ---
+    // --- Lógica de Eventos (Solo para el Comparador) ---
+    
+    function renderEventComparator() {
+      const container = $('eventCheckboxesContainer');
+      
+      allEventsData.forEach((event, i) => {
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'event_comparator';
+        checkbox.value = event.event_date;
+        checkbox.id = `chk-${i}`;
+        checkbox.dataset.tag = event.tag;
+        
+        checkbox.addEventListener('change', updateEventComparatorChart);
+        
+        label.htmlFor = checkbox.id;
+        label.title = event.title;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(event.tag));
+        
+        container.appendChild(label);
+      });
+    }
+
+    async function updateEventComparatorChart() {
+      const checkedEvents = document.querySelectorAll('#eventCheckboxesContainer input:checked');
+      const maxDate = luxon.DateTime.fromISO(MAX_DATE_STR);
+
+      // --- 1. Resetear si no hay nada seleccionado ---
+      if (checkedEvents.length === 0) {
+        eventComparatorPieChart.data.labels = ['Sin selección'];
+        eventComparatorPieChart.data.datasets[0].data = [1];
+        eventComparatorPieChart.data.datasets[0].backgroundColor = [C_MUTED_BG];
+        eventComparatorPieChart.update();
+        return;
+      }
+      
+      // --- 2. Preparar Fetches ---
+      let totalPos = 0;
+      let totalNeg = 0;
+      let totalNeu = 0;
+      
+      const kpisPromises = [];
+      
+      checkedEvents.forEach(checkbox => {
+        const {from, to} = getEventDateRange(checkbox.value, maxDate);
+        kpisPromises.push(fetchJSON(`${API_BASE}/kpis?from=${from}&to=${to}`));
+      });
+      
+      // --- 3. Ejecutar Fetches en paralelo ---
+      const kpisResults = await Promise.all(kpisPromises);
+      
+      // --- 4. Sumar resultados de KPIs (para el Pie Chart) ---
+      kpisResults.forEach(kpis => {
+        if (kpis) {
+          totalPos += (kpis.total_pos || 0);
+          totalNeg += (kpis.total_neg || 0);
+          totalNeu += (kpis.total_neu || 0);
+        }
+      });
+      
+      // --- 5. Actualizar UI ---
+      eventComparatorPieChart.data.labels = ['Positivo', 'Negativo', 'Neutro'];
+      eventComparatorPieChart.data.datasets[0].data = [totalPos, totalNeg, totalNeu];
+      eventComparatorPieChart.data.datasets[0].backgroundColor = [C_POS, C_NEG, C_NEU];
+      eventComparatorPieChart.update();
+    }
+    
+    // --- Funciones de Utilidad ---
+    
+    function getEventDateRange(eventDateStr, maxDate) {
+      const startDate = luxon.DateTime.fromISO(eventDateStr);
+      const endDate = startDate.plus({ days: 30 });
+      const finalEndDate = endDate > maxDate ? maxDate : endDate;
+      return {
+        from: startDate.toISODate(),
+        to: finalEndDate.toISODate()
+      };
+    }
+
+    // --- Funciones de Actualización de UI (Principales) ---
 
     function updateKpis(kpis) {
       const total = kpis.total_comments || 0;
@@ -295,8 +499,12 @@
 
     // --- Lógica de Inicio ---
     (async () => {
+      // Carga inicial de gráficos principales (siempre rango completo)
       await refresh();
       await loadTopics();
+      
+      // Renderizar solo el comparador de eventos
+      renderEventComparator(); // Las checkboxes para el comparador
     })();
   </script>
 </body>
