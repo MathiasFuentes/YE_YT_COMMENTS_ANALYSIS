@@ -60,6 +60,18 @@ Este proyecto analiza más de 80,000 comentarios de YouTube para visualizar la p
 ````
 
 ---
+## Previo a la Ejecución
+
+Este proyecto utiliza un archivo grande de base de datos (databaser.db) almacenado con Git LFS (Large File Storage), es decir, el archivo descargado no es la base real, sino un puntero de Git LFS.
+Desde la carpeta raíz del proyecto, descarga la db de la siguiente forma:
+```bash
+# 1. Instalar Git LFS
+git lfs install
+
+# 2. Descargar DB
+git lfs pull
+```
+Con esto, Flask podrá leer correctamente la base de datos y el backend funcionará sin errores.
 
 ## Cómo Ejecutarlo
 
