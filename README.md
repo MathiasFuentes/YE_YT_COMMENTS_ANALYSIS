@@ -64,7 +64,12 @@ Este proyecto analiza más de 80,000 comentarios de YouTube para visualizar la p
 
 Este proyecto utiliza un archivo grande de base de datos (databaser.db) almacenado con Git LFS (Large File Storage), es decir, el archivo descargado no es la base real, sino un puntero de Git LFS.
 Desde la carpeta raíz del proyecto, descarga la db de la siguiente forma:
+
+**Para usar Git LFS, es obligatorio usar clonar el repositorio desde su comando correspondiente:**
 ```bash
+#Previo: Clonar el repo
+git clone https://github.com/MathiasFuentes/YE_YT_COMMENTS_ANALYSIS.git
+
 # 1. Instalar Git LFS
 git lfs install
 
