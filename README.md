@@ -85,22 +85,23 @@ Con esto, Flask podrá leer correctamente la base de datos y el backend funciona
 El backend sirve los datos desde la base de datos.
 
 ```bash
-1. Navega a la carpeta del backend
-# cd backend
+#1. (Recomendado) Crea un entorno virtual
+python -m venv venv
 
-2. (Recomendado) Crea un entorno virtual
-# python -m venv venv
+#Para activar el entorno virtual:
+#En Windows:
+venv\Scripts\activate
+#En macOS/Linux:
+source venv/bin/activate
 
-En Windows:
-# venv\Scripts\activate
-En macOS/Linux:
-# source venv/bin/activate
+#2. Instala los requerimientos
+pip install -r requirements.txt
 
-3. Instala los requerimientos
-# pip install -r requirements.txt
+#3. Navega a la carpeta del backend
+cd backend
 
-4. Inicia el servidor
-# python app.py
+#4. Inicia el servidor
+python app.py
 ````
 
 El servidor del backend se ejecutará en `http://127.0.0.1:5000`
@@ -110,14 +111,14 @@ El servidor del backend se ejecutará en `http://127.0.0.1:5000`
 El frontend es un archivo estático y debe servirse desde un puerto diferente.
 
 ```bash
-1. Abre OTRA terminal
-2. Navega a la carpeta del frontend
-# cd frontend
+#1. Abre OTRA terminal
+#2. Navega a la carpeta del frontend
+cd frontend
 
-3. Inicia un servidor web simple
+#3. Inicia un servidor web simple
 python -m http.server 5500
 ```
 
 El frontend estará disponible en `http://localhost:5500`
 
-¡Abre **`http://localhost:5500`** en tu navegador para ver el dashboard\!
+## ¡Abre **`http://localhost:5500`** en tu navegador para ver el dashboard\!
