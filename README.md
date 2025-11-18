@@ -12,17 +12,17 @@ Este proyecto analiza más de 80,000 comentarios de YouTube para visualizar la p
 ## Features
 
 ### Panel Principal
-* **KPIs Globales:** Métricas clave (Total, Pos, Neg, Neu) y un "Net Sentiment Score" (Sentimiento Neto) para todo el período.
-* **Distribución de Sentimiento:** Un gráfico de dona que muestra la proporción general de sentimientos.
-* **Análisis de Temáticas:** Un gráfico de barras horizontales apiladas que desglosa los temas más discutidos (Música, Polémicas, etc.) y su composición de sentimiento.
-* **Descripciones de Modelos:** Textos de referencia que explican qué modelos de NLP se usaron para obtener los datos (`roBERTa` y `facebook/bart-large-mnli`).
+* **KPIs Globales:** Métricas clave (Total de comentarios analizados, Positivos, Negativos, Neutros) y un "Net Sentiment Score" (Sentimiento Neto) para todo el período histórico.
+* **Distribución de Sentimiento:** Gráfico de dona que muestra la proporción general de sentimientos en el conjunto completo de comentarios.
+* **Análisis de Temáticas:** Gráfico de barras horizontales apiladas que desglosa los temas más discutidos (Música, Polémicas, Religión, Moda/Yeezy, etc.) y su composición de sentimiento.
+* **Evolución Semestral del Sentimiento:** Gráfico de líneas que muestra cómo cambia, semestre a semestre (enero–junio / julio–diciembre), el porcentaje de comentarios Positivos, Negativos y Neutros a lo largo del tiempo (2020–2025), suavizando el ruido diario y resaltando tendencias.
+* **Comentarios con más Likes:** Cuadro desplazable con los comentarios históricos que acumulan más “me gusta” en YouTube, mostrando autor, texto, fecha y clasificación de sentimiento.
 
 ### Sección de Comparativa de Eventos
-* **Lista de Eventos (Checkboxes):** Una lista completa de eventos clave en la carrera de Kanye.
-* **Selección Múltiple:** Permite seleccionar uno o más eventos para comparar.
-* **Gráfico Pie de Impacto:** Un gráfico de torta dinámico que **suma** los datos de sentimiento (Pos/Neg/Neu) de los 30 días posteriores a cada evento seleccionado, mostrando el impacto agregado.
-* **Estado Cero:** Si no se selecciona ningún evento, el gráfico muestra un estado gris ("Sin selección").
-
+* **Lista de Eventos (Checkboxes):** Listado de eventos clave en la carrera de Kanye (entrevistas, campañas políticas, lanzamientos de discos, polémicas, etc.).
+* **Selección Múltiple:** Permite seleccionar uno o más eventos para comparar su impacto de forma agregada.
+* **Gráfico Pie de Impacto:** Gráfico de torta dinámico que suma los datos de sentimiento (Pos/Neg/Neu) de los 30 días posteriores a cada evento seleccionado, mostrando el impacto combinado.
+* **Estado Cero:** Si no se selecciona ningún evento, el gráfico muestra un estado neutro ("Sin selección") para indicar que no hay datos que visualizar.
 ---
 
 ## Tech Stack
